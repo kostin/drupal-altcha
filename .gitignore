@@ -1,0 +1,9 @@
+/.idea/
+/.vscode/
+/vendor/
+*.log
+*.patch
+*.orig
+*.rej
+.DS_Store
+Thumbs.db

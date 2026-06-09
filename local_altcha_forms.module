@@ -1,0 +1,193 @@
+<?php
+
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Render\Markup;
+
+/**
+ * CAPTCHA type label exposed to the CAPTCHA module.
+ */
+define('LOCAL_ALTCHA_FORMS_CAPTCHA_TYPE', 'Local Altcha');
+
+/**
+ * Returns module settings.
+ */
+function local_altcha_forms_settings() {
+  $settings = [
+    'robot_label' => 'I am not a robot',
+    'challenge_path' => '/altcha/challenge',
+    'challenge_ttl' => 900,
+    'max_number' => 50000,
+  ];
+
+  if (isset($GLOBALS['settings']['local_altcha_forms']) && is_array($GLOBALS['settings']['local_altcha_forms'])) {
+    $settings = array_replace($settings, $GLOBALS['settings']['local_altcha_forms']);
+  }
+
+  return $settings;
+}
+
+/**
+ * Returns the HMAC key used to sign challenges.
+ */
+function local_altcha_forms_get_hmac_key() {
+  $settings = local_altcha_forms_settings();
+  if (!empty($settings['hmac_key']) && is_string($settings['hmac_key'])) {
+    return $settings['hmac_key'];
+  }
+
+  $secret = \Drupal::state()->get('local_altcha_forms.hmac_key');
+  if (empty($secret)) {
+    $secret = bin2hex(random_bytes(32));
+    \Drupal::state()->set('local_altcha_forms.hmac_key', $secret);
+  }
+
+  return $secret;
+}
+
+/**
+ * Implements hook_captcha().
+ *
+ * This exposes the "Local Altcha" CAPTCHA type to the CAPTCHA module. Form
+ * placement is managed by CAPTCHA points, just like reCAPTCHA.
+ */
+function local_altcha_forms_captcha($op, $captcha_type = '') {
+  switch ($op) {
+    case 'list':
+      return [LOCAL_ALTCHA_FORMS_CAPTCHA_TYPE];
+
+    case 'generate':
+      if ($captcha_type !== LOCAL_ALTCHA_FORMS_CAPTCHA_TYPE) {
+        return NULL;
+      }
+
+      $settings = local_altcha_forms_settings();
+      return [
+        'solution' => '1',
+        'cacheable' => FALSE,
+        'form' => [
+          '#attached' => [
+            'library' => ['local_altcha_forms/challenge'],
+          ],
+          'captcha_response' => [
+            '#type' => 'checkbox',
+            '#title' => Markup::create(htmlspecialchars($settings['robot_label'], ENT_QUOTES, 'UTF-8') . ' <span class="local-altcha-status" aria-live="polite"></span>'),
+            '#required' => TRUE,
+            '#default_value' => 0,
+            '#attributes' => [
+              'class' => ['local-altcha-checkbox'],
+              'data-challenge-url' => $settings['challenge_path'],
+            ],
+            '#element_validate' => ['local_altcha_forms_captcha_element_validate'],
+          ],
+          'altcha' => [
+            '#type' => 'hidden',
+            '#default_value' => '',
+            '#attributes' => [
+              'class' => ['local-altcha-payload'],
+            ],
+          ],
+        ],
+      ];
+  }
+
+  return NULL;
+}
+
+/**
+ * Validates the local Altcha payload before CAPTCHA's own response comparison.
+ */
+function local_altcha_forms_captcha_element_validate(array &$element, FormStateInterface $form_state, array &$complete_form) {
+  $input = $form_state->getUserInput();
+  $payload = $input['altcha'] ?? '';
+
+  if (!local_altcha_forms_verify_payload($payload)) {
+    $form_state->setError($element, t('Please confirm that you are not a robot.'));
+  }
+}
+
+/**
+ * Verifies Altcha payload sent by the local client script.
+ */
+function local_altcha_forms_verify_payload($payload) {
+  if (!is_string($payload) || $payload === '') {
+    return FALSE;
+  }
+
+  $json = base64_decode($payload, TRUE);
+  if ($json === FALSE) {
+    return FALSE;
+  }
+
+  $data = json_decode($json, TRUE);
+  if (!is_array($data)) {
+    return FALSE;
+  }
+
+  foreach (['algorithm', 'challenge', 'number', 'salt', 'signature'] as $key) {
+    if (!isset($data[$key])) {
+      return FALSE;
+    }
+  }
+
+  if (strtoupper($data['algorithm']) !== 'SHA-256') {
+    return FALSE;
+  }
+
+  $settings = local_altcha_forms_settings();
+  $number = (int) $data['number'];
+  if ($number < 0 || $number > (int) $settings['max_number']) {
+    return FALSE;
+  }
+
+  $expected_signature = hash_hmac('sha256', $data['salt'] . '&', local_altcha_forms_get_hmac_key());
+  if (!hash_equals($expected_signature, $data['signature'])) {
+    return FALSE;
+  }
+
+  $expected_challenge = hash('sha256', $data['salt'] . $number);
+  if (!hash_equals($expected_challenge, $data['challenge'])) {
+    return FALSE;
+  }
+
+  $query = parse_url($data['salt'], PHP_URL_QUERY);
+  if (!$query) {
+    return FALSE;
+  }
+  parse_str($query, $params);
+  if (empty($params['expires']) || (int) $params['expires'] < time()) {
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Attach assets to forms containing this CAPTCHA type. CAPTCHA module controls
+ * where the challenge appears; this module only supplies the type.
+ */
+function local_altcha_forms_form_alter(array &$form, FormStateInterface $form_state, $form_id) {
+  if (local_altcha_forms_form_has_local_altcha($form)) {
+    $form['#attached']['library'][] = 'local_altcha_forms/challenge';
+  }
+}
+
+/**
+ * Checks whether a form tree contains this module's CAPTCHA checkbox.
+ */
+function local_altcha_forms_form_has_local_altcha(array $element) {
+  foreach ($element as $child) {
+    if (!is_array($child)) {
+      continue;
+    }
+    if (!empty($child['#attributes']['class']) && in_array('local-altcha-checkbox', (array) $child['#attributes']['class'], TRUE)) {
+      return TRUE;
+    }
+    if (local_altcha_forms_form_has_local_altcha($child)) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}

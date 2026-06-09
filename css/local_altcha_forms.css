@@ -1,0 +1,27 @@
+.local-altcha-checks,
+.form-item-captcha-response {
+  margin: 0 0 1rem;
+}
+
+.local-altcha-checks .form-item,
+.form-item-captcha-response {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.local-altcha-checks input[type="checkbox"],
+.local-altcha-checkbox {
+  flex: 0 0 auto;
+  margin-top: 0.25rem;
+}
+
+.local-altcha-checks label,
+.form-item-captcha-response label {
+  line-height: 1.45;
+}
+
+.local-altcha-status {
+  color: #666;
+  font-size: 0.875em;
+}

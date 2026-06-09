@@ -1,0 +1,11 @@
+{
+  "name": "local/local_altcha_forms",
+  "description": "Drupal CAPTCHA type that adds local Altcha-style proof-of-work spam protection.",
+  "type": "drupal-module",
+  "license": "MIT",
+  "require": {
+    "php": ">=7.1",
+    "drupal/core": "^8 || ^9 || ^10",
+    "drupal/captcha": "^1 || ^2"
+  }
+}

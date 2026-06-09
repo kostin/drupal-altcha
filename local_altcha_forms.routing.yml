@@ -1,0 +1,6 @@
+local_altcha_forms.challenge:
+  path: '/altcha/challenge'
+  defaults:
+    _controller: '\Drupal\local_altcha_forms\Controller\AltchaController::challenge'
+  requirements:
+    _access: 'TRUE'

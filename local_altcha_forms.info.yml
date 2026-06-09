@@ -1,0 +1,9 @@
+name: Local Altcha Forms
+type: module
+description: Provides a local Altcha-style proof-of-work CAPTCHA type.
+package: Spam control
+core: 8.x
+core_version_requirement: ^8 || ^9 || ^10
+dependencies:
+  - drupal:system
+  - captcha:captcha

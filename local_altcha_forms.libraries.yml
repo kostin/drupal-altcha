@@ -1,0 +1,6 @@
+challenge:
+  js:
+    js/local_altcha_forms.js: {}
+  css:
+    theme:
+      css/local_altcha_forms.css: {}
